@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QR Kod Üretici — Ücretsiz ve Anında</title>
+<meta name="description" content="Ücretsiz QR kod üretici. Link, metin veya wifi bilgisi için anında QR kod oluşturun ve indirin.">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root {
+    --bg: #0B0E14;
+    --panel: #10141D;
+    --panel-2: #151A25;
+    --border: #232838;
+    --text: #D8DEE9;
+    --text-dim: #6B7488;
+    --accent: #E8A33D;
+    --accent-dim: #8A6526;
+    --error: #E0605A;
+    --error-bg: #2A1618;
+    --success: #5FB88C;
+    --mono: 'IBM Plex Mono', 'JetBrains Mono', monospace;
+    --sans: 'Inter', -apple-system, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    height: 100%;
+  }
+  body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 18px 28px;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+  header .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--success);
+    display: inline-block;
+    box-shadow: 0 0 8px var(--success);
+  }
+  header h1 {
+    font-family: var(--mono);
+    font-size: 16px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+  }
+  header span.sub {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+  }
+  @media (max-width: 800px) {
+    main { grid-template-columns: 1fr; }
+  }
+
+  .pane {
+    background: var(--bg);
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  .pane-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+  }
+
+  .field { display: flex; flex-direction: column; gap: 8px; }
+  .field label {
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  textarea, input[type="text"], input[type="color"], select {
+    font-family: var(--mono);
+    font-size: 14px;
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 10px 12px;
+    outline: none;
+  }
+  textarea { resize: vertical; min-height: 90px; line-height: 1.5; }
+  textarea:focus, input:focus, select:focus { border-color: var(--accent-dim); }
+
+  .row { display: flex; gap: 12px; }
+  .row .field { flex: 1; }
+
+  .color-field { display: flex; align-items: center; gap: 10px; }
+  .color-field input[type="color"] {
+    width: 44px; height: 40px;
+    padding: 2px;
+    cursor: pointer;
+  }
+  .color-field span {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tabs button {
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 7px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--panel-2);
+    color: var(--text-dim);
+    cursor: pointer;
+  }
+  .tabs button.active {
+    color: var(--accent);
+    border-color: var(--accent-dim);
+  }
+
+  button.primary {
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 500;
+    padding: 12px 20px;
+    min-height: 44px;
+    border-radius: 4px;
+    border: 1px solid var(--accent);
+    background: var(--accent);
+    color: #191204;
+    cursor: pointer;
+  }
+  button.primary:hover { background: #f0ae4f; }
+  button.secondary {
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 500;
+    padding: 10px 16px;
+    min-height: 40px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--panel-2);
+    color: var(--text);
+    cursor: pointer;
+  }
+  button.secondary:hover { border-color: var(--accent-dim); color: var(--accent); }
+
+  /* Output pane: signature element — a "print-ready" mount card for the QR */
+  .output-pane {
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+  .qr-mount {
+    background: #ffffff;
+    padding: 20px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 220px;
+    min-height: 220px;
+  }
+  #qrcode img, #qrcode canvas {
+    display: block;
+  }
+  .qr-meta {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 14px;
+  }
+  .output-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 18px;
+  }
+
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 10px 28px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--text-dim);
+    background: var(--panel);
+  }
+
+  @media (max-width: 640px) {
+    header { padding: 14px 16px; }
+    header span.sub { display: none; }
+    .pane { padding: 20px 18px; }
+    footer { padding: 10px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="dot"></span>
+  <h1>qr.üretici</h1>
+  <span class="sub">// metin → kare kod, anında</span>
+</header>
+
+<main>
+  <div class="pane">
+    <div class="pane-label">İçerik</div>
+
+    <div class="tabs" id="typeTabs">
+      <button data-type="text" class="active">Metin / Link</button>
+      <button data-type="wifi">Wi-Fi</button>
+    </div>
+
+    <div id="textFields" class="field">
+      <label for="qrText">URL veya metin</label>
+      <textarea id="qrText" placeholder="https://ornek.com veya herhangi bir metin yaz"></textarea>
+    </div>
+
+    <div id="wifiFields" style="display:none; flex-direction:column; gap:14px;">
+      <div class="field">
+        <label for="wifiSsid">Ağ adı (SSID)</label>
+        <input type="text" id="wifiSsid" placeholder="Ev-WiFi">
+      </div>
+      <div class="field">
+        <label for="wifiPass">Şifre</label>
+        <input type="text" id="wifiPass" placeholder="şifre123">
+      </div>
+      <div class="field">
+        <label for="wifiEnc">Şifreleme</label>
+        <select id="wifiEnc">
+          <option value="WPA">WPA/WPA2</option>
+          <option value="WEP">WEP</option>
+          <option value="nopass">Şifresiz (açık ağ)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label for="qrSize">Boyut</label>
+        <select id="qrSize">
+          <option value="180">Küçük (180px)</option>
+          <option value="260" selected>Orta (260px)</option>
+          <option value="380">Büyük (380px)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="qrLevel">Hata düzeltme</label>
+        <select id="qrLevel">
+          <option value="L">Düşük</option>
+          <option value="M" selected>Orta</option>
+          <option value="Q">Yüksek</option>
+          <option value="H">En yüksek</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label>Kod rengi</label>
+        <div class="color-field">
+          <input type="color" id="qrColor" value="#0B0E14">
+          <span id="qrColorLabel">#0B0E14</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>Arka plan</label>
+        <div class="color-field">
+          <input type="color" id="qrBg" value="#ffffff">
+          <span id="qrBgLabel">#ffffff</span>
+        </div>
+      </div>
+    </div>
+
+    <button class="primary" id="generateBtn">QR Kod Oluştur</button>
+  </div>
+
+  <div class="pane output-pane">
+    <div>
+      <div class="qr-mount" id="qrMount">
+        <div id="qrcode"></div>
+      </div>
+      <div class="qr-meta" id="qrMeta">İçerik gir, "QR Kod Oluştur" butonuna bas</div>
+      <div class="output-actions">
+        <button class="secondary" id="downloadBtn">PNG İndir</button>
+        <button class="secondary" id="copyLinkBtn">İçeriği Kopyala</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>qr.üretici — tamamen tarayıcında çalışır, hiçbir veri sunucuya gönderilmez</footer>
+
+<script>
+let qr = null;
+let currentType = 'text';
+
+const typeTabs = document.getElementById('typeTabs');
+const textFields = document.getElementById('textFields');
+const wifiFields = document.getElementById('wifiFields');
+
+typeTabs.addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  [...typeTabs.children].forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentType = btn.dataset.type;
+  textFields.style.display = currentType === 'text' ? 'flex' : 'none';
+  wifiFields.style.display = currentType === 'wifi' ? 'flex' : 'none';
+});
+
+document.getElementById('qrColor').addEventListener('input', (e) => {
+  document.getElementById('qrColorLabel').textContent = e.target.value;
+});
+document.getElementById('qrBg').addEventListener('input', (e) => {
+  document.getElementById('qrBgLabel').textContent = e.target.value;
+});
+
+function escapeWifiValue(v) {
+  return v.replace(/([\\;,:"])/g, '\\$1');
+}
+
+function buildContent() {
+  if (currentType === 'wifi') {
+    const ssid = document.getElementById('wifiSsid').value.trim();
+    const pass = document.getElementById('wifiPass').value;
+    const enc = document.getElementById('wifiEnc').value;
+    if (!ssid) return null;
+    const passPart = enc === 'nopass' ? '' : `P:${escapeWifiValue(pass)};`;
+    return `WIFI:T:${enc};S:${escapeWifiValue(ssid)};${passPart};`;
+  }
+  const text = document.getElementById('qrText').value.trim();
+  return text || null;
+}
+
+function generate() {
+  const content = buildContent();
+  const meta = document.getElementById('qrMeta');
+  const container = document.getElementById('qrcode');
+  container.innerHTML = '';
+
+  if (!content) {
+    meta.textContent = 'İçerik gir, "QR Kod Oluştur" butonuna bas';
+    return;
+  }
+
+  const size = Number(document.getElementById('qrSize').value);
+  const color = document.getElementById('qrColor').value;
+  const bg = document.getElementById('qrBg').value;
+  const level = document.getElementById('qrLevel').value;
+  const correctLevelMap = { L: QRCode.CorrectLevel.L, M: QRCode.CorrectLevel.M, Q: QRCode.CorrectLevel.Q, H: QRCode.CorrectLevel.H };
+
+  qr = new QRCode(container, {
+    text: content,
+    width: size,
+    height: size,
+    colorDark: color,
+    colorLight: bg,
+    correctLevel: correctLevelMap[level]
+  });
+
+  const bytes = new Blob([content]).size;
+  meta.textContent = `${bytes} bayt · ${size}×${size}px`;
+}
+
+document.getElementById('generateBtn').addEventListener('click', generate);
+
+document.getElementById('downloadBtn').addEventListener('click', () => {
+  const canvas = document.querySelector('#qrcode canvas');
+  const img = document.querySelector('#qrcode img');
+  const source = canvas || img;
+  if (!source) { generate(); return; }
+  const link = document.createElement('a');
+  link.download = 'qr-kod.png';
+  link.href = canvas ? canvas.toDataURL('image/png') : img.src;
+  link.click();
+});
+
+document.getElementById('copyLinkBtn').addEventListener('click', async () => {
+  const content = buildContent();
+  if (!content) return;
+  try {
+    await navigator.clipboard.writeText(content);
+    const btn = document.getElementById('copyLinkBtn');
+    const original = btn.textContent;
+    btn.textContent = 'Kopyalandı ✓';
+    setTimeout(() => { btn.textContent = original; }, 1400);
+  } catch (e) { /* clipboard unavailable */ }
+});
+
+// Generate an initial placeholder QR so the panel isn't empty
+document.getElementById('qrText').value = 'https://ornek.com';
+generate();
+</script>
+
+</body>
+</html>
