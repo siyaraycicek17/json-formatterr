@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JSON Formatter — Diagnostics Console</title>
+<meta name="description" content="Ücretsiz JSON formatter, doğrulayıcı ve minifier. JSON verinizi anında biçimlendirin, hataları bulun.">
+<style>
+  :root {
+    --bg: #0B0E14;
+    --panel: #10141D;
+    --panel-2: #151A25;
+    --border: #232838;
+    --text: #D8DEE9;
+    --text-dim: #6B7488;
+    --accent: #E8A33D;
+    --accent-dim: #8A6526;
+    --error: #E0605A;
+    --error-bg: #2A1618;
+    --success: #5FB88C;
+    --mono: 'IBM Plex Mono', 'JetBrains Mono', monospace;
+    --sans: 'Inter', -apple-system, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    height: 100%;
+  }
+  body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+
+  /* Header */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 18px 28px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .brand {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .brand .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--success);
+    display: inline-block;
+    box-shadow: 0 0 8px var(--success);
+  }
+  .brand h1 {
+    font-family: var(--mono);
+    font-size: 16px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: var(--text);
+  }
+  .brand span.sub {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  button {
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 500;
+    padding: 8px 14px;
+    min-height: 40px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--panel-2);
+    color: var(--text);
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  button:hover { border-color: var(--accent-dim); color: var(--accent); }
+  button:active { border-color: var(--accent); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #191204;
+  }
+  button.primary:hover { background: #f0ae4f; color: #191204; }
+  select {
+    font-family: var(--mono);
+    font-size: 12px;
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 7px 10px;
+    min-height: 40px;
+  }
+
+  /* Mobile: brand full width, actions as a scrollable/wrapping row of equal touch targets */
+  @media (max-width: 640px) {
+    header {
+      padding: 14px 16px;
+      gap: 12px;
+    }
+    .brand { width: 100%; }
+    .brand h1 { font-size: 15px; }
+    .brand span.sub { display: none; }
+    .actions {
+      width: 100%;
+      gap: 8px;
+    }
+    .actions button, .actions select {
+      flex: 1 1 calc(33.333% - 6px);
+      min-width: 88px;
+      font-size: 12.5px;
+      padding: 10px 8px;
+      text-align: center;
+    }
+    .actions button.primary { flex-basis: 100%; order: -1; }
+  }
+
+  /* Main grid */
+  main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+  }
+  @media (max-width: 860px) {
+    main { grid-template-columns: 1fr; }
+
+    header {
+      padding: 14px 16px;
+    }
+    .brand .sub { display: none; }
+    .actions { width: 100%; }
+    .actions button, .actions select {
+      flex: 1 1 auto;
+      min-height: 40px;
+      font-size: 13px;
+    }
+
+    footer {
+      padding: 10px 16px;
+      gap: 14px 20px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* Tab switcher: only one pane visible at a time */
+    .mobile-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel);
+    }
+    .mobile-tabs button {
+      flex: 1;
+      border: none;
+      border-radius: 0;
+      background: transparent;
+      font-family: var(--mono);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 12px 8px;
+      color: var(--text-dim);
+      border-bottom: 2px solid transparent;
+    }
+    .mobile-tabs button.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+    .pane[data-pane="input"], .pane[data-pane="output"] {
+      display: none;
+    }
+    .pane[data-pane="input"].mobile-active,
+    .pane[data-pane="output"].mobile-active {
+      display: flex;
+    }
+    .pane-head { display: none; }
+    textarea, pre#output { min-height: calc(100vh - 230px); }
+  }
+  @media (min-width: 861px) {
+    .mobile-tabs { display: none; }
+  }
+  .pane {
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .pane-head {
+    padding: 10px 20px;
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  textarea {
+    flex: 1;
+    resize: none;
+    background: transparent;
+    color: var(--text);
+    border: none;
+    outline: none;
+    font-family: var(--mono);
+    font-size: 13.5px;
+    line-height: 1.6;
+    padding: 20px;
+    min-height: 320px;
+  }
+  textarea::placeholder { color: var(--text-dim); }
+  pre#output {
+    flex: 1;
+    margin: 0;
+    padding: 20px;
+    font-family: var(--mono);
+    font-size: 13.5px;
+    line-height: 1.6;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    min-height: 320px;
+  }
+
+  /* JSON syntax coloring */
+  .jk { color: #7EB2E8; }   /* key */
+  .js { color: var(--success); } /* string */
+  .jn { color: var(--accent); }  /* number */
+  .jb { color: #C58FE8; }   /* bool/null */
+  .jp { color: var(--text-dim); } /* punctuation */
+
+  .error-box {
+    margin: 20px;
+    padding: 14px 16px;
+    background: var(--error-bg);
+    border: 1px solid var(--error);
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--error);
+    line-height: 1.6;
+  }
+
+  /* Diagnostics strip — signature element */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 10px 28px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--text-dim);
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    background: var(--panel);
+  }
+  footer .stat { display: flex; gap: 6px; align-items: baseline; }
+  footer .stat b { color: var(--text); font-weight: 500; }
+  footer .stat.ok b { color: var(--success); }
+  footer .stat.bad b { color: var(--error); }
+
+  .hint {
+    padding: 60px 20px;
+    text-align: center;
+    color: var(--text-dim);
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <span class="dot"></span>
+    <h1>json.formatter</h1>
+    <span class="sub">// paste → validate → biçimlendir</span>
+  </div>
+  <div class="actions">
+    <select id="indent">
+      <option value="2">2 boşluk</option>
+      <option value="4">4 boşluk</option>
+      <option value="tab">Tab</option>
+    </select>
+    <button id="minifyBtn">Minify</button>
+    <button id="copyBtn">Kopyala</button>
+    <button id="downloadBtn">İndir</button>
+    <button id="clearBtn">Temizle</button>
+    <button id="formatBtn" class="primary">Biçimlendir</button>
+  </div>
+</header>
+
+<div class="mobile-tabs">
+  <button id="tabInput" class="active">Input</button>
+  <button id="tabOutput">Output</button>
+</div>
+
+<main>
+  <div class="pane mobile-active" data-pane="input">
+    <div class="pane-head"><span>INPUT</span></div>
+    <textarea id="input" placeholder='{"örnek": "buraya JSON verini yapıştır...", "aktif": true, "sayı": 42}' spellcheck="false"></textarea>
+  </div>
+  <div class="pane" data-pane="output">
+    <div class="pane-head"><span>OUTPUT</span></div>
+    <div id="outputWrap">
+      <div class="hint">Sonuç burada görünecek</div>
+    </div>
+  </div>
+</main>
+
+<footer id="stats">
+  <div class="stat"><span>durum</span><b id="statStatus">—</b></div>
+  <div class="stat"><span>boyut</span><b id="statSize">0 B</b></div>
+  <div class="stat"><span>anahtar sayısı</span><b id="statKeys">0</b></div>
+  <div class="stat"><span>derinlik</span><b id="statDepth">0</b></div>
+</footer>
+
+<script>
+const input = document.getElementById('input');
+const outputWrap = document.getElementById('outputWrap');
+const indentSel = document.getElementById('indent');
+const statStatus = document.getElementById('statStatus');
+const statSize = document.getElementById('statSize');
+const statKeys = document.getElementById('statKeys');
+const statDepth = document.getElementById('statDepth');
+
+function escapeHtml(s) {
+  return s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+}
+
+function syntaxHighlight(jsonStr) {
+  const escaped = escapeHtml(jsonStr);
+  return escaped.replace(
+    /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)/g,
+    (match) => {
+      if (/^"/.test(match)) {
+        return /:$/.test(match) ? `<span class="jk">${match}</span>` : `<span class="js">${match}</span>`;
+      }
+      if (/true|false|null/.test(match)) return `<span class="jb">${match}</span>`;
+      return `<span class="jn">${match}</span>`;
+    }
+  );
+}
+
+function countKeysAndDepth(obj, depth = 1) {
+  let keys = 0, maxDepth = depth;
+  if (Array.isArray(obj)) {
+    obj.forEach(item => {
+      if (item && typeof item === 'object') {
+        const r = countKeysAndDepth(item, depth + 1);
+        keys += r.keys;
+        maxDepth = Math.max(maxDepth, r.maxDepth);
+      }
+    });
+  } else if (obj && typeof obj === 'object') {
+    keys += Object.keys(obj).length;
+    Object.values(obj).forEach(v => {
+      if (v && typeof v === 'object') {
+        const r = countKeysAndDepth(v, depth + 1);
+        keys += r.keys;
+        maxDepth = Math.max(maxDepth, r.maxDepth);
+      }
+    });
+  }
+  return { keys, maxDepth };
+}
+
+function getIndent() {
+  const v = indentSel.value;
+  return v === 'tab' ? '\t' : Number(v);
+}
+
+function bytesOf(str) {
+  return new Blob([str]).size;
+}
+
+function formatBytes(n) {
+  if (n < 1024) return n + ' B';
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+  return (n / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function render() {
+  const raw = input.value.trim();
+  if (!raw) {
+    outputWrap.innerHTML = '<div class="hint">Sonuç burada görünecek</div>';
+    statStatus.textContent = '—';
+    statStatus.parentElement.className = 'stat';
+    statSize.textContent = '0 B';
+    statKeys.textContent = '0';
+    statDepth.textContent = '0';
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    const indent = getIndent();
+    const formatted = JSON.stringify(parsed, null, indent);
+    outputWrap.innerHTML = `<pre id="output">${syntaxHighlight(formatted)}</pre>`;
+    statStatus.textContent = 'geçerli';
+    statStatus.parentElement.className = 'stat ok';
+    statSize.textContent = formatBytes(bytesOf(formatted));
+    const { keys, maxDepth } = countKeysAndDepth(parsed);
+    statKeys.textContent = keys;
+    statDepth.textContent = maxDepth;
+    return formatted;
+  } catch (e) {
+    outputWrap.innerHTML = `<div class="error-box">⚠ ${escapeHtml(e.message)}</div>`;
+    statStatus.textContent = 'hatalı';
+    statStatus.parentElement.className = 'stat bad';
+    statSize.textContent = formatBytes(bytesOf(raw));
+    statKeys.textContent = '—';
+    statDepth.textContent = '—';
+    return null;
+  }
+}
+
+const tabInput = document.getElementById('tabInput');
+const tabOutput = document.getElementById('tabOutput');
+const paneInput = document.querySelector('.pane[data-pane="input"]');
+const paneOutput = document.querySelector('.pane[data-pane="output"]');
+
+function showMobilePane(which) {
+  const isInput = which === 'input';
+  tabInput.classList.toggle('active', isInput);
+  tabOutput.classList.toggle('active', !isInput);
+  paneInput.classList.toggle('mobile-active', isInput);
+  paneOutput.classList.toggle('mobile-active', !isInput);
+}
+tabInput.addEventListener('click', () => showMobilePane('input'));
+tabOutput.addEventListener('click', () => showMobilePane('output'));
+
+document.getElementById('formatBtn').addEventListener('click', () => {
+  render();
+  if (window.innerWidth <= 860) showMobilePane('output');
+});
+indentSel.addEventListener('change', render);
+
+document.getElementById('minifyBtn').addEventListener('click', () => {
+  const raw = input.value.trim();
+  if (!raw) return;
+  try {
+    const parsed = JSON.parse(raw);
+    const min = JSON.stringify(parsed);
+    input.value = min;
+    render();
+  } catch (e) {
+    render();
+  }
+});
+
+document.getElementById('clearBtn').addEventListener('click', () => {
+  input.value = '';
+  render();
+});
+
+document.getElementById('copyBtn').addEventListener('click', async () => {
+  const out = document.getElementById('output');
+  const text = out ? out.textContent : '';
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+    const btn = document.getElementById('copyBtn');
+    const original = btn.textContent;
+    btn.textContent = 'Kopyalandı ✓';
+    setTimeout(() => { btn.textContent = original; }, 1400);
+  } catch (e) { /* clipboard unavailable */ }
+});
+
+document.getElementById('downloadBtn').addEventListener('click', () => {
+  const out = document.getElementById('output');
+  const text = out ? out.textContent : '';
+  if (!text) return;
+  const blob = new Blob([text], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'formatted.json';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+input.addEventListener('input', () => {
+  clearTimeout(window._t);
+  window._t = setTimeout(render, 250);
+});
+
+render();
+</script>
+
+</body>
+</html>
